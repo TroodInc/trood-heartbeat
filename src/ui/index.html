@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trood Heartbeat - Admin</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    h1 { color: #333; }
+    .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .card h3 { margin: 0 0 8px 0; }
+    .card p { margin: 4px 0; color: #666; font-size: 14px; }
+    .btn { display: inline-block; padding: 8px 16px; background: #0066cc; color: #fff; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; }
+    .btn:hover { background: #0055aa; }
+    .btn-secondary { background: #666; }
+    .btn-secondary:hover { background: #555; }
+    form { margin-top: 20px; }
+    label { display: block; margin-bottom: 4px; font-weight: 500; }
+    input, select { width: 100%; padding: 8px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 4px; }
+    .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+    .status-enabled { background: #d4edda; color: #155724; }
+    .status-disabled { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+  <h1>Trood Heartbeat</h1>
+  
+  <div id="projects"></div>
+  
+  <div class="card">
+    <h3>Add New Project</h3>
+    <form id="add-form">
+      <label>Project Name</label>
+      <input type="text" name="name" required placeholder="My Project">
+      
+      <label>GitHub Repository</label>
+      <input type="text" name="github_repo" required placeholder="owner/repo">
+      
+      <label>Discourse Category</label>
+      <input type="text" name="discourse_category" placeholder="5 or contribution">
+      
+      <label>Discourse Topic ID</label>
+      <input type="text" name="discourse_topic" placeholder="16">
+      
+      <label>Schedule (days)</label>
+      <input type="number" name="schedule_days" value="7" min="1">
+      
+      <button type="submit" class="btn">Add Project</button>
+    </form>
+  </div>
+
+  <script>
+    const api = (path, opts = {}) => fetch('/api' + path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    }).then(r => r.json());
+
+    const loadProjects = async () => {
+      const projects = await api('/projects');
+      const container = document.getElementById('projects');
+      container.innerHTML = projects.map(p => `
+        <div class="card">
+          <h3>${p.name} <span class="status ${p.enabled ? 'status-enabled' : 'status-disabled'}">${p.enabled ? 'Enabled' : 'Disabled'}</span></h3>
+          <p><strong>Repo:</strong> ${p.github_repo}</p>
+          <p><strong>Category:</strong> ${p.discourse_category || 'Not set'}</p>
+          <p><strong>Topic:</strong> ${p.discourse_topic || 'New topic mode'}</p>
+          <p><strong>Schedule:</strong> Every ${p.schedule_days} days</p>
+          <p><strong>Last posted:</strong> ${p.last_post_at ? new Date(p.last_post_at).toLocaleString() : 'Never'}</p>
+          <a href="project.html?id=${p.id}" class="btn">Manage</a>
+        </div>
+      `).join('');
+    };
+
+    document.getElementById('add-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const data = Object.fromEntries(new FormData(form));
+      data.schedule_days = parseInt(data.schedule_days, 10);
+      await api('/projects', { method: 'POST', body: data });
+      form.reset();
+      loadProjects();
+    });
+
+    loadProjects();
+  </script>
+</body>
+</html>

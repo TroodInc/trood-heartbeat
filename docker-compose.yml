@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  heartbeat:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://heartbeat:heartbeat@postgres:5432/heartbeat
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - DISCOURSE_URL=${DISCOURSE_URL}
+      - DISCOURSE_API_KEY=${DISCOURSE_API_KEY}
+      - DISCOURSE_API_USERNAME=${DISCOURSE_API_USERNAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=heartbeat
+      - POSTGRES_PASSWORD=heartbeat
+      - POSTGRES_DB=heartbeat
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heartbeat"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

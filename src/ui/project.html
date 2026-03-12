@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project - Trood Heartbeat</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    h1, h2 { color: #333; }
+    .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .btn { display: inline-block; padding: 8px 16px; background: #0066cc; color: #fff; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; margin-right: 8px; }
+    .btn:hover { background: #0055aa; }
+    .btn-danger { background: #dc3545; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-success { background: #28a745; }
+    .btn-success:hover { background: #218838; }
+    label { display: block; margin-bottom: 4px; font-weight: 500; }
+    input, textarea { width: 100%; padding: 8px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 4px; }
+    textarea { min-height: 80px; resize: vertical; }
+    .preview-box { width: 100%; min-height: 320px; background: #f8f9fa; padding: 16px; border-radius: 4px; white-space: pre-wrap; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .note { background: #fff3cd; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .note button { background: none; border: none; color: #dc3545; cursor: pointer; }
+    a { color: #0066cc; }
+  </style>
+</head>
+<body>
+  <p><a href="index.html">&larr; Back to Projects</a></p>
+  <h1 id="title">Loading...</h1>
+  
+  <div class="card">
+    <h2>Settings</h2>
+    <form id="edit-form">
+      <label>Project Name</label>
+      <input type="text" name="name" required>
+      
+      <label>GitHub Repository</label>
+      <input type="text" name="github_repo" required>
+      
+      <label>Discourse Category</label>
+      <input type="text" name="discourse_category">
+      
+      <label>Discourse Topic ID</label>
+      <input type="text" name="discourse_topic">
+      
+      <label>Schedule (days)</label>
+      <input type="number" name="schedule_days" min="1">
+      
+      <label>
+        <input type="checkbox" name="enabled" style="width: auto; margin-right: 8px;">
+        Enabled
+      </label>
+      
+      <button type="submit" class="btn">Save Changes</button>
+      <button type="button" class="btn btn-danger" id="delete-btn">Delete Project</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Roadmap Notes</h2>
+    <div id="notes"></div>
+    <form id="note-form">
+      <textarea name="content" placeholder="Add a roadmap note..." required></textarea>
+      <button type="submit" class="btn">Add Note</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Heartbeat Preview</h2>
+    <button class="btn" id="preview-btn">Generate Preview</button>
+    <button class="btn btn-success" id="publish-btn">Publish Now</button>
+    <textarea id="preview" class="preview-box">Click "Generate Preview" to see the next heartbeat digest.</textarea>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('id');
+
+    const api = (path, opts = {}) => fetch('/api' + path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    }).then(r => r.json());
+
+    let project = null;
+
+    const loadProject = async () => {
+      project = await api(`/projects/${projectId}`);
+      document.getElementById('title').textContent = project.name;
+      document.title = `${project.name} - Trood Heartbeat`;
+      
+      const form = document.getElementById('edit-form');
+      form.name.value = project.name;
+      form.github_repo.value = project.github_repo;
+      form.discourse_category.value = project.discourse_category || '';
+      form.discourse_topic.value = project.discourse_topic || '';
+      form.schedule_days.value = project.schedule_days;
+      form.enabled.checked = project.enabled;
+
+      renderNotes();
+    };
+
+    const renderNotes = () => {
+      const container = document.getElementById('notes');
+      if (!project.roadmap_notes?.length) {
+        container.innerHTML = '<p style="color:#666">No roadmap notes yet.</p>';
+        return;
+      }
+      container.innerHTML = project.roadmap_notes.map(n => `
+        <div class="note">
+          <span>${n.content}</span>
+          <button onclick="deleteNote(${n.id})">&times;</button>
+        </div>
+      `).join('');
+    };
+
+    window.deleteNote = async (id) => {
+      await api(`/notes/${id}`, { method: 'DELETE' });
+      project.roadmap_notes = project.roadmap_notes.filter(n => n.id !== id);
+      renderNotes();
+    };
+
+    document.getElementById('edit-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        name: form.name.value,
+        github_repo: form.github_repo.value,
+        discourse_category: form.discourse_category.value,
+        discourse_topic: form.discourse_topic.value,
+        schedule_days: parseInt(form.schedule_days.value, 10),
+        enabled: form.enabled.checked
+      };
+      await api(`/projects/${projectId}`, { method: 'PUT', body: data });
+      alert('Saved!');
+      loadProject();
+    });
+
+    document.getElementById('delete-btn').addEventListener('click', async () => {
+      if (!confirm('Delete this project?')) return;
+      await api(`/projects/${projectId}`, { method: 'DELETE' });
+      window.location.href = 'index.html';
+    });
+
+    document.getElementById('note-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const content = e.target.content.value;
+      const note = await api(`/projects/${projectId}/notes`, { method: 'POST', body: { content } });
+      project.roadmap_notes.unshift(note);
+      e.target.reset();
+      renderNotes();
+    });
+
+    document.getElementById('preview-btn').addEventListener('click', async () => {
+      const preview = document.getElementById('preview');
+      preview.value = 'Loading...';
+      const { digest, error } = await api(`/projects/${projectId}/preview`);
+      preview.value = error ? 'Failed to generate preview.' : digest;
+    });
+
+    document.getElementById('publish-btn').addEventListener('click', async () => {
+      if (!confirm('Publish heartbeat now?')) return;
+      const preview = document.getElementById('preview');
+      const markdown = preview.value;
+      preview.value = 'Publishing...';
+      const { digest, error, skipped, reason } = await api(`/projects/${projectId}/publish`, {
+        method: 'POST',
+        body: { markdown }
+      });
+      if (error) {
+        alert('Error: ' + error);
+        preview.value = 'Failed to publish.';
+      } else if (skipped) {
+        alert(reason);
+        preview.value = markdown;
+      } else {
+        alert('Published!');
+        preview.value = digest;
+        loadProject();
+      }
+    });
+
+    loadProject();
+  </script>
+</body>
+</html>

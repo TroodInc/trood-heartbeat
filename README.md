@@ -1,290 +1,271 @@
 # Trood Heartbeat
 
-Trood Heartbeat is a lightweight service that generates **project heartbeat updates** from GitHub activity and publishes them to Discourse communities.
+Lightweight service that generates **project heartbeat updates** from GitHub activity and publishes them to Discourse communities.
 
-The goal is simple: **every project should show visible progress without manual reporting.**
-
-Trood Heartbeat observes repository activity and periodically publishes digest updates summarizing:
-
-- new issues
-- closed issues
-- merged pull requests
-- new contributors
-- optional roadmap notes from maintainers
-
-The service runs automatically but allows maintainers to preview and publish updates manually.
+**Every project should show visible progress without manual reporting.**
 
 ---
 
-# Why Trood Heartbeat Exists
+## Features
 
-Open-source and internal projects often struggle with **visibility**.
-
-When contributors cannot see progress, they assume the project is inactive.
-
-Trood Heartbeat solves this by ensuring that every project produces a regular activity signal.
-
-Instead of writing weekly reports manually, maintainers can rely on automated summaries.
-
-The system follows three principles:
-
-- **GitHub is the source of truth**
-- **Automation should reduce work, not create processes**
-- **KISS (Keep It Simple)**
+| Feature | Description |
+|---------|-------------|
+| **GitHub Activity Collector** | Fetches new/closed issues, merged PRs, new contributors, and good-first-issue labels |
+| **Digest Builder** | Generates a structured Markdown summary |
+| **Discourse Publisher** | Posts the digest to a Discourse category |
+| **Scheduler** | Automatically publishes on a configurable interval (default: weekly) |
+| **Admin UI** | Manage projects, add roadmap notes, preview & publish manually |
+| **CLI Mode** | Generate digests from the command line for CI/testing |
 
 ---
 
-# Key Features
+## Architecture
 
-## Automated Project Digests
+```
+GitHub API  ──▶  Heartbeat Engine  ──▶  Discourse API
+                       │
+                  PostgreSQL
+                       │
+                   Admin UI
+```
 
-Trood Heartbeat periodically analyzes activity in a repository and generates a digest including:
-
-- newly opened issues
-- recently closed issues
-- merged pull requests
-- new contributors
-
-Example output:
-
-"
-Project Heartbeat
-
-New Issues
-• Improve Medium parser
-• Add Substack ingestion
-
-Closed Issues
-• Fix Telegram extraction bug
-
-Merged PRs
-• Parser refactor by @alice
-
-New Contributors
-• @bob
-
-Roadmap
-Next week we focus on stabilizing the ingestion pipeline.
-
-"
-
+GitHub is the **source of truth**. The engine observes, summarizes, and publishes—nothing more.
 
 ---
 
-## Discourse Publishing
+## Project Structure
 
-Heartbeat updates can be automatically published to communities running Discourse.
-
-This keeps the community informed without manual reporting.
-
----
-
-## Admin Preview
-
-Maintainers can:
-
-- preview the next heartbeat
-- add roadmap comments
-- publish an update manually
-
-Manual publishing resets the schedule.
-
----
-
-## Scheduled Automation
-
-By default, Trood Heartbeat publishes updates **weekly**.
-
-The scheduler checks each project and publishes a digest when it becomes due.
+```
+trood-heartbeat/
+├── src/
+│   ├── server.js        # Express admin server
+│   ├── scheduler.js     # Heartbeat scheduler
+│   ├── github.js        # GitHub API integration
+│   ├── discourse.js     # Discourse API integration
+│   ├── digest.js        # Markdown digest builder
+│   ├── db/
+│   │   └── postgres.js  # Database access layer
+│   └── ui/
+│       ├── index.html   # Project list
+│       └── project.html # Project detail / publish
+├── heartbeat.js         # CLI entrypoint
+├── Dockerfile
+├── docker-compose.yml
+├── package.json
+└── README.md
+```
 
 ---
 
-## CLI Mode
+## Quick Start
 
-Trood Heartbeat can also run as a CLI tool.
+### Docker
+
+`npm install` is **not** needed when you run with Docker.
+
+```bash
+git clone https://github.com/troodinc/trood-heartbeat.git
+cd trood-heartbeat
+cp .env.example .env
+docker-compose up --build
+```
+
+Then open `http://localhost:3000`.
+
+### Local Node.js
+
+Use this path only if you want to run outside Docker:
+
+```bash
+npm install
+node src/server.js
+```
+
+---
+
+## Configuration
+
+Copy `.env.example` to `.env` and fill in the values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_TOKEN` | GitHub Personal Access Token |
+| `DISCOURSE_URL` | Discourse instance URL (e.g., `https://forum.example.com`) |
+| `DISCOURSE_API_KEY` | Discourse API key |
+| `DISCOURSE_API_USERNAME` | Discourse API username (e.g., `system`) |
+| `DATABASE_URL` | PostgreSQL connection string. In Docker Compose, the internal value is already set |
+| `PORT` | Server port (default: `3000`) |
+
+---
+
+## Database
+
+Trood Heartbeat uses PostgreSQL. Tables are created automatically on first run.
+
+**Tables:**
+
+- `projects` – id, name, github_repo, discourse_category, discourse_topic, schedule_days, last_post_at, enabled
+- `roadmap_notes` – id, project_id, content, created_at
+
+---
+
+## Running the Service
+
+### Recommended: Docker Compose
+
+```bash
+docker-compose up --build
+```
+
+This starts:
+
+- the `heartbeat` service
+- a `postgres` database
+
+The admin UI is available at `http://localhost:3000`.
+
+### Local Node.js
+
+```bash
+npm install
+node src/server.js
+```
+
+Use local mode only if PostgreSQL is already running and `DATABASE_URL` is set correctly.
+
+---
+
+## CLI Usage
+
+Generate a heartbeat digest without publishing:
+
+```bash
+export GITHUB_TOKEN=ghp_xxx
+node heartbeat.js --project owner/repo
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `--project` | GitHub repository (`owner/repo`) – **required** |
+| `--days` | Days to look back (default: `7`) |
 
 Example:
 
-node heartbeat.js --project owner/repo
+```bash
+node heartbeat.js --project octocat/Hello-World --days 14
+```
 
-
-This generates the heartbeat digest without publishing.
-
-Useful for testing or CI pipelines.
-
----
-
-# Architecture
-
-Trood Heartbeat is intentionally small.
-
-
-GitHub → Heartbeat Engine → Discourse
-
-
-GitHub provides the activity data.
-
-The heartbeat engine builds a digest.
-
-The digest is published to Discourse.
-
-An optional admin UI allows configuration and manual publishing.
+Useful for CI pipelines and local testing.
 
 ---
 
-# Project Structure
+## Admin Interface
 
+Access at `http://localhost:3000/ui/`.
 
-trood-heartbeat
+**Capabilities:**
 
-/src
-server.js Admin interface
-scheduler.js Update scheduler
-github.js GitHub activity collector
-discourse.js Discourse publisher
-digest.js Digest builder
-
-/src/ui
-index.html
-project.html
-
-/src/db
-postgres.js
-
-heartbeat.js CLI entry point
-
-Dockerfile
-docker-compose.yml
-README.md
-
+- Add / edit / delete projects
+- Bind GitHub repository and Discourse category or topic
+- Set update interval (days)
+- Add roadmap notes
+- Preview the next heartbeat digest
+- Publish manually (resets the schedule timer)
 
 ---
 
-# Installation
+## Digest Format
 
-Clone the repository:
+```markdown
+# Project Heartbeat
 
+## New Issues
+- [Issue title](url)
 
-git clone https://github.com/trood/trood-heartbeat
+## Closed Issues
+- [Issue title](url)
 
-cd trood-heartbeat
+## Merged PRs
+- [PR title](url) by @author
 
+## New Contributors
+- @username
 
-Install dependencies:
+## Good First Issues
+- [Issue title](url)
 
-
-npm install
-
-
----
-
-# Configuration
-
-Trood Heartbeat uses environment variables.
-
-Required variables:
-
-
-GITHUB_TOKEN=
-DISCOURSE_URL=
-DISCOURSE_API_KEY=
-DISCOURSE_API_USERNAME=
-DATABASE_URL=
-
-
-The database should be a PostgreSQL instance.
+## Roadmap
+Optional notes from maintainers.
+```
 
 ---
 
-# Running the Service
+## Deployment Options
 
-Start the server:
+Trood Heartbeat can run:
 
-
-node src/server.js
-
-
-The scheduler will run automatically.
-
----
-
-# Docker
-
-Build the image:
-
-
-docker build -t trood-heartbeat .
-
-
-Run the container:
-
-
-docker run trood-heartbeat
-
-
-Or use docker-compose:
-
-
-docker-compose up
-
+- **Standalone** – `node src/server.js`
+- **Docker** – `docker-compose up`
+- **On-premise** – deploy behind a reverse proxy
+- **Trood / OpenClaw pipelines** – integrate via CLI or API
 
 ---
 
-# Admin Interface
+## Discourse Publishing Modes
 
-The admin UI allows maintainers to:
+- **Category mode**
+  - set `discourse_category`
+  - each heartbeat becomes a new topic in that category
 
-- add projects
-- bind GitHub repositories
-- bind Discourse categories
-- add roadmap notes
-- preview heartbeat updates
-- publish updates manually
+- **Topic mode**
+  - set `discourse_topic`
+  - each heartbeat becomes a reply in that existing project topic
 
-Manual publishing resets the schedule.
-
----
-
-# Use Cases
-
-Trood Heartbeat works well for:
-
-- open-source communities
-- internal engineering teams
-- startup product updates
-- ecosystem coordination
-
-Any project that benefits from **transparent progress updates**.
+If `discourse_topic` is set, it takes precedence over `discourse_category`.
 
 ---
 
-# Trood Ecosystem
+## API Endpoints
 
-Trood Heartbeat is part of the broader Trood ecosystem, which focuses on automation and AI-assisted software development workflows.
-
-The service can run:
-
-- standalone
-- in on-premise environments
-- inside OpenClaw deployments
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/projects` | List all projects |
+| GET | `/api/projects/:id` | Get project with roadmap notes |
+| POST | `/api/projects` | Create project |
+| PUT | `/api/projects/:id` | Update project |
+| DELETE | `/api/projects/:id` | Delete project |
+| POST | `/api/projects/:id/notes` | Add roadmap note |
+| DELETE | `/api/notes/:id` | Delete roadmap note |
+| GET | `/api/projects/:id/preview` | Preview digest |
+| POST | `/api/projects/:id/publish` | Publish digest now |
 
 ---
 
-# Contributing
+## Contributing
 
-Contributions are welcome.
+Contributions are welcome!
 
-Typical contributions include:
-
-- improving digest formatting
-- adding additional data sources
-- improving scheduler logic
-- expanding community integrations
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
 
 Please open an issue before submitting major changes.
 
+**Areas for contribution:**
+
+- Digest formatting improvements
+- Additional data sources (e.g., releases, discussions)
+- Scheduler enhancements
+- Alternative publishing targets
+
 ---
 
-# License
+## License
 
 Apache 2.0
